@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Hyper-Key Configuration</title>
+    <link rel="stylesheet" href="/static/bootstrap.min.css">
+    <script src="/static/bootstrap.bundle.min.js"></script>
+    <style>
+        .container {
+            max-width: 600px;
+            margin-top: 50px;
+        }
+
+        .form-label {
+            font-weight: bold;
+        }
+
+        .alert {
+            margin-top: 20px;
+            display: none;
+        }
+
+        #hyperKeyHex {
+            width: 60px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="mb-4">Hyper-Key Configuration</h1>
+
+        <form id="configForm">
+            <div class="mb-3">
+                <label for="hyperKey" class="form-label">Hyper Mode</label>
+                <select class="form-select" id="hyperMode" aria-label="Select Hyper Mode">
+                    <option value="0">Hybrid</option>
+                    <option value="1">Override</option>
+                </select>
+                <div class="form-text text-secondary" id="descForHybridMode">
+                    If you hold the "Hyper Key" and then press a non modifier key(let's say the key "H"), then the
+                    "ctrl+win+alt+shift+H" key combination will be triggered.<br />
+                    If you press or hold the "Hyper Key" and release it without pressing any other key, then the
+                    original key stroke is being performed.
+                </div>
+                <div class="form-text text-secondary" id="descForOverrideMode">
+                    Completely disable the original key stroke of the "Hyper Key" and replace it with the
+                    "ctrl+win+alt+shift" key combination. <br />
+                    On Windows, if you press the "Hyper Key" alone, MS Office will be opened, if your PC doesn't have MS
+                    Office installed a web page will be opened instead.
+                    To disable this behavior, visit <a
+                        href="https://www.reddit.com/r/Office365/comments/pjhswo/how_do_i_disable_office_keyboard_shortcutshotkeys/"
+                        target="_blank">this webpage</a> for more info.
+
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="hyperKey" class="form-label">Hyper Key Code</label>
+                <div class="row">
+                    <div class="d-grid col-8">
+                        <button type="button" class="btn btn-primary" id="hyperKeyButton"></button>
+                    </div>
+                    <div class="col">
+                        <input type="number" class="form-control" id="hyperKeyRaw" min="0" max="254" required>
+                    </div>
+                    <div class="form-text text-secondary">
+                        Press the button to change the "Hyper Key". You can manually modify the key code in the input
+                        field, if this web page doesn't detect your key press.<br />
+                        You can find your desire key code in <a
+                            href="https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes"
+                            target="_blank">this page</a>,
+                        but the value is represented in hexadecimal format, you can paste the hexadecimal value here:
+                        <input type="text" id="hyperKeyHex">.
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="mb-3 form-check form-switch">
+                    <label for="useMehKey" class="form-label">Use Meh Key</label>
+                    <input type="checkbox" class="form-check-input" id="useMehKey">
+                    <div class="form-text text-secondary">
+                        "Meh Key" is "ctrl+alt+shift", "Hyper Key" is "ctrl+win+alt+shift".
+                    </div>
+                </div>
+                <div class=" mt-3 mb-3 d-flex flex-row-reverse">
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </div>
+        </form>
+
+        <div class="alert alert-success" id="successAlert" role="alert">
+            Configuration saved successfully!
+        </div>
+
+        <div class="alert alert-danger" id="errorAlert" role="alert">
+            Error saving configuration. Please try again.
+        </div>
+    </div>
+
+    <script>
+        var keyMappings = {
+            8: "Backspace",
+            9: "Tab",
+            12: "Clear",
+            13: "Enter",
+            19: "Pause",
+            20: "Caps lock",
+            21: "IME Hangul mode",
+            22: "IME On",
+            23: "IME Junja mode",
+            24: "IME final mode",
+            25: "IME Kanji mode",
+            26: "IME Off",
+            27: "Esc",
+            28: "IME convert",
+            29: "IME nonconvert",
+            30: "IME accept",
+            31: "IME mode change request",
+            32: "Spacebar",
+            33: "Page up",
+            34: "Page down",
+            35: "End",
+            36: "Home",
+            37: "Left arrow",
+            38: "Up arrow",
+            39: "Right arrow",
+            40: "Down arrow",
+            41: "Select",
+            42: "Print",
+            43: "Execute",
+            44: "Print screen",
+            45: "Insert",
+            46: "Delete",
+            47: "Help",
+            48: "0",
+            49: "1",
+            50: "2",
+            51: "3",
+            52: "4",
+            53: "5",
+            54: "6",
+            55: "7",
+            56: "8",
+            57: "9",
+            65: "A",
+            66: "B",
+            67: "C",
+            68: "D",
+            69: "E",
+            70: "F",
+            71: "G",
+            72: "H",
+            73: "I",
+            74: "J",
+            75: "K",
+            76: "L",
+            77: "M",
+            78: "N",
+            79: "O",
+            80: "P",
+            81: "Q",
+            82: "R",
+            83: "S",
+            84: "T",
+            85: "U",
+            86: "V",
+            87: "W",
+            88: "X",
+            89: "Y",
+            90: "Z",
+            91: "Left Windows logo",
+            92: "Right Windows logo",
+            93: "Application",
+            96: "Numericpad 0",
+            97: "Numericpad 1",
+            98: "Numericpad 2",
+            99: "Numericpad 3",
+            100: "Numericpad 4",
+            101: "Numericpad 5",
+            102: "Numericpad 6",
+            103: "Numericpad 7",
+            104: "Numericpad 8",
+            105: "Numericpad 9",
+            106: "Multiply",
+            107: "Add",
+            108: "Separator",
+            109: "Subtract",
+            110: "Decimal",
+            111: "Divide",
+            112: "F1",
+            113: "F2",
+            114: "F3",
+            115: "F4",
+            116: "F5",
+            117: "F6",
+            118: "F7",
+            119: "F8",
+            120: "F9",
+            121: "F10",
+            122: "F11",
+            123: "F12",
+            124: "F13",
+            125: "F14",
+            126: "F15",
+            127: "F16",
+            128: "F17",
+            129: "F18",
+            130: "F19",
+            131: "F20",
+            132: "F21",
+            133: "F22",
+            134: "F23",
+            135: "F24",
+            144: "Num lock",
+            145: "Scroll lock",
+            160: "Left Shift",
+            161: "Right Shift",
+            162: "Left Ctrl",
+            163: "Right Ctrl",
+            164: "Left Alt",
+            165: "Right Alt",
+            166: "Browser Back",
+            167: "Browser Forward",
+            168: "Browser Refresh",
+            169: "Browser Stop",
+            170: "Browser Search",
+            171: "Browser Favorites",
+            172: "Browser Start and Home",
+            173: "Volume Mute",
+            174: "Volume Down",
+            175: "Volume Up",
+            176: "Next Track",
+            177: "Previous Track",
+            178: "Stop Media",
+            179: "Play/Pause Media",
+            180: "Start Mail",
+            181: "Select Media",
+            182: "Start Application 1",
+            183: "Start Application 2",
+            186: "OEM",
+            187: "+",
+            188: ",",
+            189: "-",
+            190: ".",
+            191: "/ or ?",
+            192: "` or ~",
+            219: "[ or {",
+            220: "\\ or |",
+            221: "] or }",
+            222: "' or \"",
+            223: "OEM",
+            225: "OEM",
+            226: "< or > , maybe \\ or |",
+            227: "OEM",
+            228: "OEM",
+            229: "IME PROCESS",
+            230: "OEM",
+            233: "OEM",
+            234: "OEM",
+            235: "OEM",
+            236: "OEM",
+            237: "OEM",
+            238: "OEM",
+            239: "OEM",
+            240: "OEM",
+            241: "OEM",
+            242: "OEM",
+            243: "OEM",
+            244: "OEM",
+            245: "OEM",
+            246: "Attn",
+            247: "CrSel",
+            248: "ExSel",
+            249: "Erase EOF",
+            250: "Play",
+            251: "Zoom",
+            253: "PA1",
+            254: "Clear"
+        }
+        var isChaningHyperKey = false;
+        // Fetch current configuration when page loads
+        document.addEventListener('DOMContentLoaded', function () {
+            fetchConfiguration();
+
+            updateHyperModeDesc('0');
+
+            // Set up form submission handler
+            document.getElementById('configForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+                saveConfiguration();
+            });
+
+
+            document.getElementById('hyperKeyButton').addEventListener('click', function () {
+                if (!isChaningHyperKey) {
+                    isChaningHyperKey = true;
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-info');
+                    this.innerText = "Press a key... (ESC to cancel)";
+                    document.getElementById('hyperKeyHex').value = '';
+                }
+            });
+
+            document.getElementById('hyperKeyRaw').addEventListener('change', function () {
+                updateHyperKey(this.value);
+                document.getElementById('hyperKeyHex').value = '';
+            });
+
+            document.getElementById('hyperKeyHex').addEventListener('change', function () {
+                let val = this.value;
+                if (val.startsWith('0x')) {
+                    val = val.substring(2);
+                }
+                let keyCode = parseInt(val, 16);
+                if (isNaN(keyCode)) {
+                    return;
+                }
+                updateHyperKey(keyCode);
+            });
+
+            document.addEventListener('keydown', function (event) {
+                //console.log(`Key pressed: ${event.key} (keyCode: ${event.keyCode.toString(16)})`);
+                if (isChaningHyperKey) {
+                    if (event.keyCode === 27) 
+                        updateHyperKey(document.getElementById('hyperKeyRaw').value);
+                    else 
+                        updateHyperKey(event.keyCode);
+                    isChaningHyperKey = false;
+                }
+            });
+        });
+
+
+
+        document.getElementById('hyperMode').addEventListener('change', function () {
+            updateHyperModeDesc(this.value);
+        });
+
+        function updateHyperKey(keyCode) {
+            let keyName = keyMappings[keyCode];
+            if (!keyName) keyName = "Not Supported";
+            
+            let btn = document.getElementById('hyperKeyButton');
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-primary');
+            btn.innerText = keyName;
+            document.getElementById('hyperKeyRaw').value = keyCode;
+        }
+
+        function updateHyperModeDesc(val) {
+            if (val === '0') {
+                document.getElementById('descForHybridMode').style.display = 'block';
+                document.getElementById('descForOverrideMode').style.display = 'none';
+            } else if (val === '1') {
+                document.getElementById('descForHybridMode').style.display = 'none';
+                document.getElementById('descForOverrideMode').style.display = 'block';
+            }
+        }
+
+        // Fetch configuration from server
+        function fetchConfiguration() {
+            fetch('/get-conf')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch configuration');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Update form with current configuration
+                    document.getElementById('hyperMode').value = data.hyperMode;
+                    document.getElementById('useMehKey').checked = data.useMehKey;
+                    updateHyperKey(data.theKey);
+                })
+                .catch(error => {
+                    console.error('Error fetching configuration:', error);
+                    showAlert('errorAlert', 'Failed to load configuration. Please refresh the page.');
+                });
+        }
+
+        // Save configuration to server
+        function saveConfiguration() {
+            const config = {
+                hyperMode: parseInt(document.getElementById('hyperMode').value),
+                theKey: parseInt(document.getElementById('hyperKeyRaw').value, 10),
+                useMehKey: document.getElementById('useMehKey').checked
+            };
+
+            fetch('/set-conf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to save configuration');
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    showAlert('successAlert', 'Configuration saved successfully!');
+                })
+                .catch(error => {
+                    console.error('Error saving configuration:', error);
+                    showAlert('errorAlert', 'Failed to save configuration. Please try again.');
+                    document.getElementById('configForm').disabled
+                });
+        }
+
+        // Show alert message
+        function showAlert(alertId, message) {
+            const alert = document.getElementById(alertId);
+            alert.textContent = message;
+            alert.style.display = 'block';
+
+            // Hide alert after 3 seconds
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>
