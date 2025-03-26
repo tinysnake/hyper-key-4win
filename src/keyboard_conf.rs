@@ -4,13 +4,14 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use log::info;
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum HyperMode {
+    #[default]
     Hybrid = 0,
     Override = 1,
 }
@@ -28,7 +29,7 @@ pub struct KeyboardHookConf {
 impl Default for KeyboardHookConf {
     fn default() -> Self {
         Self {
-            hyper_mode: HyperMode::Hybrid,
+            hyper_mode: HyperMode::default(),
             the_key: 0x14,
             use_meh_key: false,
         }
@@ -44,9 +45,7 @@ pub fn get_config_folder_path() -> PathBuf {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::new(),
     };
-    let path = path.join(PathBuf::from_iter(
-        [".config", "hyper-key"].iter(),
-    ));
+    let path = path.join(PathBuf::from_iter([".config", "hyper-key"].iter()));
     _ = std::fs::DirBuilder::new().recursive(true).create(&path);
     path
 }
@@ -54,7 +53,6 @@ pub fn get_config_folder_path() -> PathBuf {
 fn get_config_file_path() -> PathBuf {
     get_config_folder_path().join("config.json")
 }
-
 
 pub fn read() {
     let path = get_config_file_path();
@@ -96,7 +94,10 @@ pub fn write_conf(conf: KeyboardHookConf, also_set_conf: bool) -> anyhow::Result
     let path = get_config_file_path();
     let conf_str = serde_json::to_string_pretty(&conf)?;
     let mut file = if path.exists() {
-        std::fs::OpenOptions::new().truncate(true).write(true).open(path)?
+        std::fs::OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .open(path)?
     } else {
         std::fs::File::create(path)?
     };

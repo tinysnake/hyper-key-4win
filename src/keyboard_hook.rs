@@ -32,8 +32,8 @@ const HYPER_MODE_RESET: u8 = 5;
 
 #[derive(Debug)]
 pub struct KeyboardHook {
-    hook: Mutex<HHOOK>,
-    data: Mutex<KeyboardHookData>,
+    hook: Arc<Mutex<HHOOK>>,
+    data: Arc<Mutex<KeyboardHookData>>,
 }
 
 #[derive(Debug)]
@@ -49,12 +49,12 @@ unsafe impl Sync for KeyboardHook {}
 impl KeyboardHook {
     pub fn new() -> Arc<KeyboardHook> {
         let kh = Arc::new(Self {
-            hook: Mutex::new(HHOOK::default()),
-            data: Mutex::new(KeyboardHookData {
+            hook: Arc::new(Mutex::new(HHOOK::default())),
+            data: Arc::new(Mutex::new(KeyboardHookData {
                 is_hyper_key_down: false,
                 hot_key_sent: false,
                 cancelling: false,
-            }),
+            })),
         });
 
         KEYBOARD_HOOK.set(kh.clone()).unwrap();
@@ -161,7 +161,7 @@ impl KeyboardHook {
         conf: &KeyboardHookConf,
     ) -> u8 {
         if key == VIRTUAL_KEY(conf.the_key) {
-            if conf.hyper_mode as u8 == keyboard_conf::HyperMode::Override as u8 {
+            if conf.hyper_mode == keyboard_conf::HyperMode::Override {
                 return HYPER_MODE_BASIC;
             } else {
                 if data.cancelling {
