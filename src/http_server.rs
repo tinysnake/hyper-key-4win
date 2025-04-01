@@ -6,16 +6,16 @@ use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 use rust_embed::Embed;
 use log::{info, error};
 
-use crate::keyboard_conf;
+use crate::keyboard_conf::{self};
 
 #[derive(Embed)]
 #[folder = "src/http_server_assets/"]
 struct Assets;
 
-pub const SERVER_ADDR: &str = "127.0.0.1:19456";
+pub const SERVER_ADDR: &str = "127.0.0.1";
 
-pub fn create_http_server() -> anyhow::Result<()> {
-    let result = Server::http(SERVER_ADDR);
+pub fn create_http_server(port:u16) -> anyhow::Result<()> {
+    let result = Server::http(format!("{}:{}", SERVER_ADDR, port));
 
     match result {
         Ok(server) => {

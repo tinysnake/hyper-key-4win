@@ -9,8 +9,8 @@ use windows::Win32::{
     UI::{
         Input::KeyboardAndMouse::{
             INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
-            KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_CONTROL, VK_LCONTROL, VK_LMENU,
-            VK_LSHIFT, VK_LWIN, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
+            KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
+            VK_LWIN, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
         },
         WindowsAndMessaging::{
             CallNextHookEx, HHOOK, KBDLLHOOKSTRUCT, SetWindowsHookExW, UnhookWindowsHookEx,
@@ -23,12 +23,12 @@ use crate::keyboard_conf::{self, KeyboardHookConf};
 
 static KEYBOARD_HOOK: OnceLock<Arc<KeyboardHook>> = OnceLock::new();
 
-const HYPER_MODE_NONE: u8 = 0;
-const HYPER_MODE_INTERUPT: u8 = 1;
-const HYPER_MODE_BASIC: u8 = 2;
-const HYPER_MODE_HOTKEY: u8 = 3;
-const HYPER_MODE_CANCEL: u8 = 4;
-const HYPER_MODE_RESET: u8 = 5;
+const PROCESS_RESULT_NONE: u8 = 0;
+const PROCESS_RESULT_INTERUPT: u8 = 1;
+const PROCESS_RESULT_BASIC: u8 = 2;
+const PROCESS_RESULT_HOTKEY: u8 = 3;
+const PROCESS_RESULT_CANCEL: u8 = 4;
+const PROCESS_RESULT_RESET: u8 = 5;
 
 #[derive(Debug)]
 pub struct KeyboardHook {
@@ -108,39 +108,47 @@ impl KeyboardHook {
         let conf = { conf_result.unwrap().clone() };
         let key = VIRTUAL_KEY(input.vkCode as u16);
         let is_key_down = key_action == WM_KEYDOWN || key_action == WM_SYSKEYDOWN;
-        let hyper_mode = {
+        let process_result = {
             let mut data_guard = self.data.lock().unwrap();
             let data: &mut KeyboardHookData = data_guard.deref_mut();
-            self.process_hyper_key(key, is_key_down, data, &conf)
+            match conf.hyper_mode {
+                keyboard_conf::HyperMode::Override => self.process_hyper_key_override(key, is_key_down, data, &conf),
+                keyboard_conf::HyperMode::Hybrid => self.process_hyper_key_hybrid(key, is_key_down, data, &conf),
+                _ => PROCESS_RESULT_NONE,
+            }
         };
-        match hyper_mode {
-            HYPER_MODE_BASIC => {
+        match process_result {
+            PROCESS_RESULT_BASIC => {
                 debug!(
                     "send_hyper_key: {}",
                     if is_key_down { "DOWN" } else { "UP" }
                 );
                 self.send_hyper_key(conf.use_meh_key, is_key_down);
             }
-            HYPER_MODE_HOTKEY => {
+            PROCESS_RESULT_HOTKEY => {
                 debug!(
                     "send_hyper_hotkey: {}",
                     if is_key_down { "DOWN" } else { "UP" }
                 );
                 self.send_hyper_key(conf.use_meh_key, is_key_down);
                 // the actual hotkey stroke is current one, no need to send again.
+                // but if the current key is conf.the_key, it means hyper_key is released before the normal key, so we should interrupt this one.
+                if key == VIRTUAL_KEY(conf.the_key) {
+                    return true;
+                }
             }
-            HYPER_MODE_CANCEL => {
+            PROCESS_RESULT_CANCEL => {
                 debug!("cancel_hyper_key");
                 self.send_input(&[
                     self.get_key_input(VIRTUAL_KEY(conf.the_key), true),
                     // key up stroke is current one, no need to send again.
                 ]);
             }
-            HYPER_MODE_RESET => {
+            PROCESS_RESULT_RESET => {
                 warn!("reset states");
                 self.send_hyper_key(conf.use_meh_key, false);
             }
-            HYPER_MODE_INTERUPT => {
+            PROCESS_RESULT_INTERUPT => {
                 return true;
             }
             _ => {}
@@ -153,7 +161,7 @@ impl KeyboardHook {
         false
     }
 
-    fn process_hyper_key(
+    fn process_hyper_key_override(
         &self,
         key: VIRTUAL_KEY,
         is_key_down: bool,
@@ -161,50 +169,59 @@ impl KeyboardHook {
         conf: &KeyboardHookConf,
     ) -> u8 {
         if key == VIRTUAL_KEY(conf.the_key) {
-            if conf.hyper_mode == keyboard_conf::HyperMode::Override {
-                return HYPER_MODE_BASIC;
-            } else {
-                if data.cancelling {
-                    if is_key_down {
-                        data.is_hyper_key_down = false;
-                        data.cancelling = false;
-                    }
-                    return HYPER_MODE_NONE;
-                } else if !data.is_hyper_key_down {
-                    if is_key_down {
-                        data.is_hyper_key_down = true;
-                        debug!("hyper_key_down:");
-                    }
-                } else if !is_key_down {
+            return PROCESS_RESULT_BASIC;
+        }
+        return PROCESS_RESULT_NONE;
+    }
+
+    fn process_hyper_key_hybrid(
+        &self,
+        key: VIRTUAL_KEY,
+        is_key_down: bool,
+        data: &mut KeyboardHookData,
+        conf: &KeyboardHookConf,
+    ) -> u8 {
+        if key == VIRTUAL_KEY(conf.the_key) {
+            if data.cancelling {
+                if is_key_down {
                     data.is_hyper_key_down = false;
-                    if data.hot_key_sent {
-                        data.hot_key_sent = false;
-                        debug!("set variable: hot_key_sent false");
-                    } else {
-                        data.cancelling = true;
-                        return HYPER_MODE_CANCEL;
-                    }
+                    data.cancelling = false;
                 }
-                return HYPER_MODE_INTERUPT;
+                return PROCESS_RESULT_NONE;
+            } else if !data.is_hyper_key_down {
+                if is_key_down {
+                    data.is_hyper_key_down = true;
+                    debug!("hyper_key_down:");
+                }
+            } else if !is_key_down {
+                data.is_hyper_key_down = false;
+                if data.hot_key_sent {
+                    data.hot_key_sent = false;
+                    debug!("set variable: hot_key_sent false");
+                    return PROCESS_RESULT_HOTKEY;
+                } else {
+                    data.cancelling = true;
+                    return PROCESS_RESULT_CANCEL;
+                }
             }
+            return PROCESS_RESULT_INTERUPT;
         } else if key == VK_ESCAPE {
             if data.cancelling || data.is_hyper_key_down || data.hot_key_sent {
                 data.cancelling = false;
                 data.hot_key_sent = false;
                 data.is_hyper_key_down = false;
-                return HYPER_MODE_RESET;
+                return PROCESS_RESULT_RESET;
             }
-        }
-        else if !Self::is_modifier_key(key) {
+        } else if !Self::is_modifier_key(key) {
             if data.is_hyper_key_down {
                 if is_key_down {
                     data.hot_key_sent = true;
                     debug!("set variable: hot_key_sent true");
                 }
-                return HYPER_MODE_HOTKEY;
+                return PROCESS_RESULT_HOTKEY;
             }
         }
-        return HYPER_MODE_NONE;
+        return PROCESS_RESULT_NONE;
     }
 
     fn send_input(&self, inputs: &[INPUT]) {

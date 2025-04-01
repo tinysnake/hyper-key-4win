@@ -8,7 +8,6 @@ mod keyboard_hook;
 use log::{error, info};
 
 use simplelog::{ColorChoice, CombinedLogger, ConfigBuilder, LevelFilter, TermLogger, TerminalMode, WriteLogger};
-use advisory_lock::{AdvisoryFileLock, FileLockMode};
 #[cfg(target_os = "windows")]
 use keyboard_hook::KeyboardHook;
 #[cfg(target_os = "windows")]
@@ -29,39 +28,22 @@ fn main() {
 
     init_logger();
 
-    let pid_file = keyboard_conf::get_config_folder_path().join(".pid");
+    keyboard_conf::read();
 
-    let file_result = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(pid_file);
-    if file_result.is_err() {
-        error!("Failed to access pid file: {:?}", file_result.unwrap_err());
+    let port = {
+        let conf = keyboard_conf::CONF.lock().unwrap();
+        conf.port
+    };
+
+    let http_server = http_server::create_http_server(port);
+
+    if let Err(err) = http_server {
+        error!("cannot start http server: {}, maybe another instance is running, or the port {} is in use by other process", err, port);
         return;
     }
-    let file = file_result.unwrap();
-    match file.try_lock(FileLockMode::Exclusive) {
-        Ok(()) => {}
-        Err(err) => {
-            println!("Failed to access pid file: {:?}", err);
-            return;
-        }
-    }
-
-    keyboard_conf::read();
 
     #[cfg(target_os = "windows")]
     let kh = KeyboardHook::new();
-
-    let http_server = http_server::create_http_server();
-
-    let mut http_server_started = false;
-
-    if let Err(err) = http_server {
-        error!("cannot start http server: {}", err);
-    } else {
-        http_server_started = true;
-    }
 
     let icon_result = tray_icon::Icon::from_resource(32512, None);
     let icon = match icon_result {
@@ -76,7 +58,7 @@ fn main() {
     let tray_menu = Menu::new();
     tray_menu
         .append_items(&[
-            &MenuItem::with_id(MENU_PREF_ID, "Preferences", http_server_started, None),
+            &MenuItem::with_id(MENU_PREF_ID, "Preferences", true, None),
             &MenuItem::with_id(MENU_RELOAD_ID, "Reload Config", true, None),
             &MenuItem::with_id(MENU_QUIT_ID, "Quit", true, None),
         ])
@@ -100,16 +82,18 @@ fn main() {
     info!("stopping!");
     #[cfg(target_os = "windows")]
     kh.stop();
-    _ = file.unlock();
+    // _ = file.unlock();
 }
 
 fn init_logger() {
     let config = ConfigBuilder::new()
         .set_time_offset_to_local().unwrap()
         .build();
+
+    let file = std::fs::OpenOptions::new().create(true).append(true).open(keyboard_conf::get_config_folder_path().join("error.log")).unwrap();
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Trace, config.clone(), TerminalMode::Mixed, ColorChoice::Auto),
-        WriteLogger::new(LevelFilter::Error, config.clone(), std::fs::File::create(keyboard_conf::get_config_folder_path().join("error.log")).unwrap()),
+        WriteLogger::new(LevelFilter::Error, config.clone(), file),
     ]).unwrap();
 }
 
@@ -147,7 +131,12 @@ fn handle_menu_event() -> bool {
         return match &event.id.0[..] {
             MENU_QUIT_ID => true,
             MENU_PREF_ID => {
-                _ = open::that(format!("http://{}/config", http_server::SERVER_ADDR));
+                let config = keyboard_conf::CONF.lock();
+                if config.is_err() {
+                    return false;
+                }
+                let config = config.unwrap();
+                _ = open::that(format!("http://{}:{}/config", http_server::SERVER_ADDR, config.port));
                 false
             }
             MENU_RELOAD_ID => {

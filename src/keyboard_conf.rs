@@ -24,6 +24,7 @@ pub struct KeyboardHookConf {
     pub hyper_mode: HyperMode,
     pub the_key: u16,
     pub use_meh_key: bool,
+    pub port: u16,
 }
 
 impl Default for KeyboardHookConf {
@@ -32,6 +33,7 @@ impl Default for KeyboardHookConf {
             hyper_mode: HyperMode::default(),
             the_key: 0x14,
             use_meh_key: false,
+            port: 19456,
         }
     }
 }
