@@ -24,6 +24,7 @@ pub struct KeyboardHookConf {
     pub hyper_mode: HyperMode,
     pub the_key: u16,
     pub use_meh_key: bool,
+    #[serde(default)]
     pub port: u16,
 }
 

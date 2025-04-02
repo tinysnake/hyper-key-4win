@@ -28,6 +28,8 @@ fn main() {
 
     init_logger();
 
+    set_panic_hook();
+
     keyboard_conf::read();
 
     let port = {
@@ -95,6 +97,12 @@ fn init_logger() {
         TermLogger::new(LevelFilter::Trace, config.clone(), TerminalMode::Mixed, ColorChoice::Auto),
         WriteLogger::new(LevelFilter::Error, config.clone(), file),
     ]).unwrap();
+}
+
+fn set_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        error!("{}", info.to_string());
+    }));
 }
 
 #[cfg(target_os = "windows")]

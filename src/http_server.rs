@@ -138,14 +138,25 @@ fn on_incoming_requests(req: Request) {
                         return;
                     }
 
+                    let port = {
+                        let conf = keyboard_conf::CONF.lock();
+                        if conf.is_err() {
+                            info!("Failed to lock conf: {}", conf.unwrap_err());
+                            _ = req.respond(Response::empty(500));
+                            return;
+                        }
+                        conf.unwrap().port
+                    };
+
                     let conf_result = serde_json::from_str::<keyboard_conf::KeyboardHookConf>(&s);
                     if conf_result.is_err() {
-                        info!("Failed to deserialize json: {}", result.unwrap_err());
+                        info!("Failed to deserialize json: {}", conf_result.unwrap_err());
                         _ = req.respond(Response::empty(400));
                         return;
                     }
 
-                    let conf = conf_result.unwrap();
+                    let mut conf = conf_result.unwrap();
+                    conf.port = port;
                     let write_result = keyboard_conf::write_conf(conf, true);
                     if write_result.is_ok() {
                         let data = b"ok";
